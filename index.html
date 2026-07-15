@@ -525,7 +525,7 @@
 
   // 地図風：ダブルタップ→スライドでサイズ変更
   let lastTap = { x:0, y:0, t:0 };
-  const zoom = { active:false, fx:0, fy:0, startY:0, baseScale:1 };
+  const zoom = { active:false, startY:0, baseScale:1 };
   const DTAP_MS = 300;   // ダブルタップと見なす間隔
   const DTAP_DIST = 40;  // 2タップ目が近いと見なす距離
   const TAP_DIST = 12;   // 「移動なし=タップ」と見なす距離
@@ -551,7 +551,6 @@
       const near = Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DTAP_DIST;
       if(now - lastTap.t < DTAP_MS && near){
         zoom.active = true;
-        zoom.fx = e.clientX; zoom.fy = e.clientY;   // 焦点（この位置を固定して拡縮）
         zoom.startY = e.clientY;
         zoom.baseScale = state.scale;
         lastTap.t = 0;                               // 消費
@@ -569,16 +568,10 @@
     const pp = pointers.get(e.pointerId);
     pp.x = e.clientX; pp.y = e.clientY;
 
-    // 地図風：ダブルタップ後の縦スライドでサイズ変更（焦点固定）
+    // 地図風：ダブルタップ後の縦スライドでサイズ変更（中心固定・位置は動かさない）
     if(zoom.active && pointers.size === 1){
       const dy = zoom.startY - e.clientY;            // 上へ = 拡大
-      const target = clamp(zoom.baseScale * Math.pow(2, dy/240), SCALE_MIN, SCALE_MAX);
-      const f = target / state.scale;
-      const cx = window.innerWidth/2 + state.x;
-      const cy = window.innerHeight/2 + state.y;
-      state.x = (zoom.fx + f*(cx - zoom.fx)) - window.innerWidth/2;
-      state.y = (zoom.fy + f*(cy - zoom.fy)) - window.innerHeight/2;
-      state.scale = target;
+      state.scale = clamp(zoom.baseScale * Math.pow(2, dy/240), SCALE_MIN, SCALE_MAX);
       apply();
       return;
     }
@@ -662,6 +655,12 @@
   // 長押しの文字選択・ルーペ／コンテキストメニューを抑止
   document.addEventListener('selectstart', e => e.preventDefault());
   document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // iOS の長押しルーペは CSS だけでは残るため、描画エリアの
+  // タッチ既定動作（選択・ルーペ）を直接止める。ボタン/スライダーは
+  // #topbar 側（別レイヤー）なので操作性には影響しない。
+  gesture.addEventListener('touchstart', e => { if(e.cancelable) e.preventDefault(); }, { passive:false });
+  cam.addEventListener('touchstart', e => { if(e.cancelable) e.preventDefault(); }, { passive:false });
 
   // =========================================================
   //  起動
