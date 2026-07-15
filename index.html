@@ -109,7 +109,8 @@
   }
   .btn:active{ transform:scale(.96); background:rgba(255,255,255,.10); }
   .btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
-  .btn svg{ width:22px; height:22px; display:block; }
+  .btn svg{ width:22px; height:22px; display:block; stroke:currentColor; }
+  .btn svg *{ stroke:currentColor; }
   .btn .lbl{ font-size:13px; font-weight:600; letter-spacing:.01em; }
   .btn.icon{ padding:0; width:var(--tap); }
 
@@ -129,20 +130,20 @@
 
   /* スライダー領域 */
   .sliders{
-    margin-top:8px;
-    display:grid; gap:2px;
+    margin-top:6px;
+    display:grid; gap:0;
     overflow:hidden;
     transition:max-height .28s ease, opacity .2s ease, margin-top .28s ease;
-    max-height:260px; opacity:1;
+    max-height:180px; opacity:1;
   }
   #topbar.collapsed .sliders{ max-height:0; opacity:0; margin-top:0; }
 
   .row{
     display:grid;
-    grid-template-columns:64px 1fr 62px;
+    grid-template-columns:56px 1fr 54px;
     align-items:center;
     gap:10px;
-    padding:6px 6px;
+    padding:0 6px;
   }
   .row .name{
     font-size:10px; font-weight:700; letter-spacing:.10em; text-transform:uppercase;
@@ -156,7 +157,7 @@
 
   input[type=range]{
     -webkit-appearance:none; appearance:none;
-    width:100%; height:var(--tap); margin:0; background:transparent;
+    width:100%; height:34px; margin:0; background:transparent;
   }
   input[type=range]::-webkit-slider-runnable-track{
     height:4px; border-radius:99px;
@@ -211,6 +212,44 @@
   #unlockPill svg{ width:18px; height:18px; }
   #unlockPill svg *{ stroke:var(--ok); }
 
+  /* ---------- 下部 方向パッド（位置微調整） ---------- */
+  #dpad{
+    position:absolute; z-index:16;
+    right:calc(env(safe-area-inset-right) + 14px);
+    bottom:calc(env(safe-area-inset-bottom) + 18px);
+    display:grid;
+    grid-template-columns:repeat(3, 44px);
+    grid-template-rows:repeat(3, 44px);
+    gap:6px;
+    padding:8px;
+    background:var(--chrome);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border:1px solid var(--stroke); border-radius:18px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);
+  }
+  #stage.empty #dpad, #stage.locked #dpad{ display:none; }
+  .nudge{
+    display:inline-flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.05);
+    border:1px solid var(--stroke);
+    border-radius:12px;
+    color:var(--text);
+    touch-action:none;
+  }
+  .nudge:active{ background:rgba(255,176,32,.18); border-color:var(--accent); color:var(--accent); }
+  .nudge svg{ width:22px; height:22px; stroke:currentColor; }
+  .nudge svg *{ stroke:currentColor; }
+  .nudge[data-dir="up"]{    grid-area:1 / 2 / 2 / 3; }
+  .nudge[data-dir="left"]{  grid-area:2 / 1 / 3 / 2; }
+  .nudge[data-dir="right"]{ grid-area:2 / 3 / 3 / 4; }
+  .nudge[data-dir="down"]{  grid-area:3 / 2 / 4 / 3; }
+  #dpad .hub{
+    grid-area:2 / 2 / 3 / 3;
+    display:grid; place-items:center;
+    font-size:9px; font-weight:700; letter-spacing:.08em;
+    color:var(--muted); text-transform:uppercase;
+  }
+
   /* ---------- カメラエラー ---------- */
   #camError{
     position:absolute; inset:0; z-index:30; display:none;
@@ -253,6 +292,23 @@
     <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 7.5-2" stroke-width="1.8" stroke-linecap="round"/></svg>
     ロック中 — タップで編集に戻る
   </button>
+
+  <!-- 下部 方向パッド（位置微調整） -->
+  <div id="dpad" role="group" aria-label="位置を微調整">
+    <button class="nudge" data-dir="up" aria-label="上へ移動">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5m0 0l-6 6m6-6l6 6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="nudge" data-dir="left" aria-label="左へ移動">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5m0 0l6-6m-6 6l6 6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="hub">微調整</div>
+    <button class="nudge" data-dir="right" aria-label="右へ移動">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14m0 0l-6-6m6 6l-6 6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="nudge" data-dir="down" aria-label="下へ移動">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14m0 0l-6-6m6 6l6-6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
 
   <!-- 上部コントロール -->
   <div id="topbar">
@@ -509,6 +565,48 @@
     collapseBtn.setAttribute('aria-pressed', String(c));
     collapseBtn.setAttribute('aria-label', c ? 'スライダーを表示' : 'スライダーを隠す');
     document.getElementById('chev').style.transform = c ? 'rotate(180deg)' : 'none';
+  });
+
+  // =========================================================
+  //  下部 方向パッド（位置微調整）— タップ＝1px、長押し＝連続移動
+  // =========================================================
+  const DIRS = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+  let nudgeTimer = null, nudgeRAF = null;
+
+  function nudgeStep(dir, dist){
+    const d = DIRS[dir]; if(!d) return;
+    state.x += d[0] * dist;
+    state.y += d[1] * dist;
+    apply();
+  }
+
+  function stopNudge(){
+    if(nudgeTimer){ clearTimeout(nudgeTimer); nudgeTimer = null; }
+    if(nudgeRAF){ cancelAnimationFrame(nudgeRAF); nudgeRAF = null; }
+  }
+
+  document.querySelectorAll('.nudge').forEach(btn => {
+    const dir = btn.dataset.dir;
+    btn.addEventListener('pointerdown', (e) => {
+      if(state.locked || !state.hasImage) return;
+      e.preventDefault();
+      btn.setPointerCapture(e.pointerId);
+      stopNudge();
+      nudgeStep(dir, 1);                 // 最初の1タップ
+      // 長押しで加速しながら連続移動
+      let speed = 1;                     // px / frame
+      nudgeTimer = setTimeout(function loop(){
+        const frame = () => {
+          nudgeStep(dir, speed);
+          speed = Math.min(speed + 0.15, 6);
+          nudgeRAF = requestAnimationFrame(frame);
+        };
+        frame();
+      }, 320);
+    });
+    ['pointerup','pointercancel','pointerleave','lostpointercapture'].forEach(ev =>
+      btn.addEventListener(ev, () => stopNudge())
+    );
   });
 
   // =========================================================
