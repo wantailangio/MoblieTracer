@@ -23,7 +23,12 @@
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
   }
 
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  * {
+    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none;          /* 長押しのルーペ/コールアウトを抑止 */
+    -webkit-user-select:none; user-select:none;
+  }
   html,body{ height:100%; margin:0; }
   body{
     font-family:var(--sans);
@@ -212,44 +217,6 @@
   #unlockPill svg{ width:18px; height:18px; }
   #unlockPill svg *{ stroke:var(--ok); }
 
-  /* ---------- 下部 方向パッド（位置微調整） ---------- */
-  #dpad{
-    position:absolute; z-index:16;
-    right:calc(env(safe-area-inset-right) + 14px);
-    bottom:calc(env(safe-area-inset-bottom) + 18px);
-    display:grid;
-    grid-template-columns:repeat(3, 44px);
-    grid-template-rows:repeat(3, 44px);
-    gap:6px;
-    padding:8px;
-    background:var(--chrome);
-    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
-    border:1px solid var(--stroke); border-radius:18px;
-    box-shadow:0 8px 24px rgba(0,0,0,.4);
-  }
-  #stage.empty #dpad, #stage.locked #dpad{ display:none; }
-  .nudge{
-    display:inline-flex; align-items:center; justify-content:center;
-    background:rgba(255,255,255,.05);
-    border:1px solid var(--stroke);
-    border-radius:12px;
-    color:var(--text);
-    touch-action:none;
-  }
-  .nudge:active{ background:rgba(255,176,32,.18); border-color:var(--accent); color:var(--accent); }
-  .nudge svg{ width:22px; height:22px; stroke:currentColor; }
-  .nudge svg *{ stroke:currentColor; }
-  .nudge[data-dir="up"]{    grid-area:1 / 2 / 2 / 3; }
-  .nudge[data-dir="left"]{  grid-area:2 / 1 / 3 / 2; }
-  .nudge[data-dir="right"]{ grid-area:2 / 3 / 3 / 4; }
-  .nudge[data-dir="down"]{  grid-area:3 / 2 / 4 / 3; }
-  #dpad .hub{
-    grid-area:2 / 2 / 3 / 3;
-    display:grid; place-items:center;
-    font-size:9px; font-weight:700; letter-spacing:.08em;
-    color:var(--muted); text-transform:uppercase;
-  }
-
   /* ---------- カメラエラー ---------- */
   #camError{
     position:absolute; inset:0; z-index:30; display:none;
@@ -292,23 +259,6 @@
     <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 7.5-2" stroke-width="1.8" stroke-linecap="round"/></svg>
     ロック中 — タップで編集に戻る
   </button>
-
-  <!-- 下部 方向パッド（位置微調整） -->
-  <div id="dpad" role="group" aria-label="位置を微調整">
-    <button class="nudge" data-dir="up" aria-label="上へ移動">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5m0 0l-6 6m6-6l6 6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <button class="nudge" data-dir="left" aria-label="左へ移動">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5m0 0l6-6m-6 6l6 6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <div class="hub">微調整</div>
-    <button class="nudge" data-dir="right" aria-label="右へ移動">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14m0 0l-6-6m6 6l-6 6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <button class="nudge" data-dir="down" aria-label="下へ移動">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14m0 0l-6-6m6 6l6-6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-  </div>
 
   <!-- 上部コントロール -->
   <div id="topbar">
@@ -568,52 +518,17 @@
   });
 
   // =========================================================
-  //  下部 方向パッド（位置微調整）— タップ＝1px、長押し＝連続移動
-  // =========================================================
-  const DIRS = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
-  let nudgeTimer = null, nudgeRAF = null;
-
-  function nudgeStep(dir, dist){
-    const d = DIRS[dir]; if(!d) return;
-    state.x += d[0] * dist;
-    state.y += d[1] * dist;
-    apply();
-  }
-
-  function stopNudge(){
-    if(nudgeTimer){ clearTimeout(nudgeTimer); nudgeTimer = null; }
-    if(nudgeRAF){ cancelAnimationFrame(nudgeRAF); nudgeRAF = null; }
-  }
-
-  document.querySelectorAll('.nudge').forEach(btn => {
-    const dir = btn.dataset.dir;
-    btn.addEventListener('pointerdown', (e) => {
-      if(state.locked || !state.hasImage) return;
-      e.preventDefault();
-      btn.setPointerCapture(e.pointerId);
-      stopNudge();
-      nudgeStep(dir, 1);                 // 最初の1タップ
-      // 長押しで加速しながら連続移動
-      let speed = 1;                     // px / frame
-      nudgeTimer = setTimeout(function loop(){
-        const frame = () => {
-          nudgeStep(dir, speed);
-          speed = Math.min(speed + 0.15, 6);
-          nudgeRAF = requestAnimationFrame(frame);
-        };
-        frame();
-      }, 320);
-    });
-    ['pointerup','pointercancel','pointerleave','lostpointercapture'].forEach(ev =>
-      btn.addEventListener(ev, () => stopNudge())
-    );
-  });
-
-  // =========================================================
   //  ジェスチャー（ドラッグ / ピンチ拡大・回転）
   // =========================================================
   const pointers = new Map();
   let prev = null; // { cx, cy, dist, ang }
+
+  // 地図風：ダブルタップ→スライドでサイズ変更
+  let lastTap = { x:0, y:0, t:0 };
+  const zoom = { active:false, fx:0, fy:0, startY:0, baseScale:1 };
+  const DTAP_MS = 300;   // ダブルタップと見なす間隔
+  const DTAP_DIST = 40;  // 2タップ目が近いと見なす距離
+  const TAP_DIST = 12;   // 「移動なし=タップ」と見なす距離
 
   function centroid(){
     let x=0, y=0, n=0;
@@ -629,13 +544,44 @@
   gesture.addEventListener('pointerdown', (e) => {
     if(state.locked || !state.hasImage) return;
     gesture.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+    // 直前がタップで、近くをもう一度押した → ダブルタップ・ズーム開始
+    if(pointers.size === 0){
+      const now = performance.now();
+      const near = Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DTAP_DIST;
+      if(now - lastTap.t < DTAP_MS && near){
+        zoom.active = true;
+        zoom.fx = e.clientX; zoom.fy = e.clientY;   // 焦点（この位置を固定して拡縮）
+        zoom.startY = e.clientY;
+        zoom.baseScale = state.scale;
+        lastTap.t = 0;                               // 消費
+      }
+    } else {
+      zoom.active = false;                           // 2本目 → ピンチへ切替
+    }
+
+    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY });
     resetGestureBase();
   });
 
   gesture.addEventListener('pointermove', (e) => {
     if(!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+    const pp = pointers.get(e.pointerId);
+    pp.x = e.clientX; pp.y = e.clientY;
+
+    // 地図風：ダブルタップ後の縦スライドでサイズ変更（焦点固定）
+    if(zoom.active && pointers.size === 1){
+      const dy = zoom.startY - e.clientY;            // 上へ = 拡大
+      const target = clamp(zoom.baseScale * Math.pow(2, dy/240), SCALE_MIN, SCALE_MAX);
+      const f = target / state.scale;
+      const cx = window.innerWidth/2 + state.x;
+      const cy = window.innerHeight/2 + state.y;
+      state.x = (zoom.fx + f*(cx - zoom.fx)) - window.innerWidth/2;
+      state.y = (zoom.fy + f*(cy - zoom.fy)) - window.innerHeight/2;
+      state.scale = target;
+      apply();
+      return;
+    }
 
     const c = centroid();
 
@@ -673,9 +619,24 @@
 
   function endPointer(e){
     if(!pointers.has(e.pointerId)) return;
+    const p = pointers.get(e.pointerId);
     pointers.delete(e.pointerId);
-    resetGestureBase();
-    if(pointers.size === 0){ syncSliders(); }
+
+    if(pointers.size === 0){
+      if(zoom.active){
+        zoom.active = false;                         // ズーム終了（連鎖はさせない）
+      } else {
+        // ほとんど動いていなければ「タップ」→ 次のダブルタップ起点に
+        const moved = Math.hypot(p.x - p.sx, p.y - p.sy);
+        lastTap = (moved < TAP_DIST)
+          ? { x:p.x, y:p.y, t:performance.now() }
+          : { x:0, y:0, t:0 };
+      }
+      prev = null;
+      syncSliders();
+    } else {
+      resetGestureBase();
+    }
   }
   function resetGestureBase(){
     if(pointers.size === 0){ prev = null; return; }
@@ -697,6 +658,10 @@
   // ダブルタップズーム等の抑止
   document.addEventListener('gesturestart', e => e.preventDefault());
   document.addEventListener('dblclick', e => e.preventDefault());
+
+  // 長押しの文字選択・ルーペ／コンテキストメニューを抑止
+  document.addEventListener('selectstart', e => e.preventDefault());
+  document.addEventListener('contextmenu', e => e.preventDefault());
 
   // =========================================================
   //  起動
