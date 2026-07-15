@@ -145,19 +145,40 @@
 
   .row{
     display:grid;
-    grid-template-columns:56px 1fr 54px;
+    grid-template-columns:42px 30px 1fr 30px 50px;
     align-items:center;
-    gap:10px;
-    padding:0 6px;
+    gap:6px;
+    padding:0 4px;
   }
   .row .name{
-    font-size:10px; font-weight:700; letter-spacing:.10em; text-transform:uppercase;
+    font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
     color:var(--muted);
   }
+
+  /* ± ステップボタン */
+  .step{
+    height:30px; min-width:30px; padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size:19px; font-weight:700; line-height:1; color:var(--text);
+    background:rgba(255,255,255,.06);
+    border:1px solid var(--stroke); border-radius:9px;
+    font-family:var(--sans);
+    transition:background .12s, border-color .12s, transform .05s;
+  }
+  .step:active{ background:rgba(255,176,32,.18); border-color:var(--accent); color:var(--accent); transform:scale(.92); }
+  .step:disabled{ opacity:.4; pointer-events:none; }
+
+  /* 値バッジ（タップでデフォルトに戻す） */
   .row .val{
     font-family:var(--mono); font-size:13px; text-align:right; color:var(--accent);
     font-variant-numeric:tabular-nums;
+    background:transparent; border:0; padding:4px 2px; cursor:pointer;
+    border-radius:8px;
+    text-decoration:underline dotted rgba(255,176,32,.55); text-underline-offset:3px;
   }
+  .row .val:active{ background:rgba(255,255,255,.12); }
+  .row .val:disabled{ opacity:.5; pointer-events:none; text-decoration:none; }
+
   .row.disabled{ opacity:.35; }
 
   input[type=range]{
@@ -295,18 +316,24 @@
       <div class="sliders">
         <div class="row disabled" id="rowOpacity">
           <span class="name">透明度</span>
+          <button class="step" data-target="opacity" data-step="-1" aria-label="透明度を1減らす">−</button>
           <input type="range" id="opacity" min="0" max="100" step="1" value="50" aria-label="透明度" />
-          <span class="val" id="opacityVal">50%</span>
+          <button class="step" data-target="opacity" data-step="1" aria-label="透明度を1増やす">＋</button>
+          <button class="val" id="opacityVal" aria-label="透明度をデフォルト(50%)に戻す" title="タップで初期値に戻す">50%</button>
         </div>
         <div class="row disabled" id="rowScale">
           <span class="name">サイズ</span>
+          <button class="step" data-target="scale" data-step="-1" aria-label="サイズを1減らす">−</button>
           <input type="range" id="scale" min="10" max="400" step="1" value="100" aria-label="サイズ" />
-          <span class="val" id="scaleVal">100%</span>
+          <button class="step" data-target="scale" data-step="1" aria-label="サイズを1増やす">＋</button>
+          <button class="val" id="scaleVal" aria-label="サイズをデフォルト(100%)に戻す" title="タップで初期値に戻す">100%</button>
         </div>
         <div class="row disabled" id="rowRot">
           <span class="name">回転</span>
+          <button class="step" data-target="rot" data-step="-1" aria-label="回転を1減らす">−</button>
           <input type="range" id="rot" min="-180" max="180" step="1" value="0" aria-label="回転" />
-          <span class="val" id="rotVal">0°</span>
+          <button class="step" data-target="rot" data-step="1" aria-label="回転を1増やす">＋</button>
+          <button class="val" id="rotVal" aria-label="回転をデフォルト(0°)に戻す" title="タップで初期値に戻す">0°</button>
         </div>
       </div>
     </div>
@@ -477,13 +504,55 @@
   // =========================================================
   //  スライダー入力
   // =========================================================
-  opacityEl.addEventListener('input', () => { state.opacity = +opacityEl.value / 100; apply(); });
-  scaleEl.addEventListener('input',   () => { state.scale = clamp(+scaleEl.value/100, SCALE_MIN, SCALE_MAX); apply(); });
-  rotEl.addEventListener('input',     () => { state.rot = +rotEl.value; apply(); });
+  // 各スライダーの設定：既定値 と state への反映
+  const sliderCfg = {
+    opacity: { el:opacityEl, def:50,  set:(v)=>{ state.opacity = v/100; } },
+    scale:   { el:scaleEl,   def:100, set:(v)=>{ state.scale = clamp(v/100, SCALE_MIN, SCALE_MAX); } },
+    rot:     { el:rotEl,     def:0,   set:(v)=>{ state.rot = v; } },
+  };
+
+  // スライダー値を設定（min/max にクランプ）→ state 反映 → 再描画
+  function setSlider(key, raw){
+    const c = sliderCfg[key];
+    const v = clamp(Math.round(raw), +c.el.min, +c.el.max);
+    c.el.value = v;
+    c.set(v);
+    apply();
+  }
+
+  opacityEl.addEventListener('input', () => setSlider('opacity', +opacityEl.value));
+  scaleEl.addEventListener('input',   () => setSlider('scale',   +scaleEl.value));
+  rotEl.addEventListener('input',     () => setSlider('rot',     +rotEl.value));
+
+  // ± ボタン：1ずつ変更（長押しで加速リピート）
+  document.querySelectorAll('.step').forEach(btn => {
+    const key  = btn.dataset.target;
+    const step = +btn.dataset.step;
+    let timer = null;
+    const bump = () => setSlider(key, +sliderCfg[key].el.value + step);
+    const start = (e) => {
+      if(btn.disabled) return;
+      e.preventDefault();
+      bump();
+      let delay = 380;
+      const rep = () => { bump(); delay = Math.max(45, delay * 0.82); timer = setTimeout(rep, delay); };
+      timer = setTimeout(rep, 420);
+    };
+    const stop = () => { if(timer){ clearTimeout(timer); timer = null; } };
+    btn.addEventListener('pointerdown', start);
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => btn.addEventListener(ev, stop));
+  });
+
+  // 値バッジのタップ：その項目だけ既定値に戻す
+  document.querySelectorAll('.val').forEach(btn => {
+    const key = btn.id.replace('Val','');   // opacityVal → opacity
+    btn.addEventListener('click', () => { setSlider(key, sliderCfg[key].def); });
+  });
 
   function enableControls(on){
     [flipBtn, lockBtn, resetBtn].forEach(b => b.disabled = !on);
     [opacityEl, scaleEl, rotEl].forEach(el => el.disabled = !on);
+    document.querySelectorAll('.row button').forEach(b => b.disabled = !on);
     for(const k in rows) rows[k].classList.toggle('disabled', !on);
   }
 
@@ -665,6 +734,7 @@
   // =========================================================
   //  起動
   // =========================================================
+  enableControls(false);   // 画像を読み込むまでは操作不可
   apply();
   startCamera();
   window.addEventListener('pagehide', stopCamera);
