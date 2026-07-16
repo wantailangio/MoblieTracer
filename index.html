@@ -304,6 +304,10 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.3 5.6" stroke-width="1.8" stroke-linecap="round"/><path d="M4 20v-4h4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
 
+        <button class="btn icon" id="focusBtn" aria-label="フォーカスを固定" aria-pressed="false" disabled>
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3.2" stroke-width="1.7"/><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+
         <button class="btn icon" id="camBtn" aria-label="カメラ切替">
           <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" stroke-width="1.6"/><path d="M10 13a2 2 0 0 1 4 0m0 0h-2m2 0v-2M14 13a2 2 0 0 1-4 0m0 0h2m-2 0v2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -367,6 +371,7 @@
   const lockBtn   = document.getElementById('lockBtn');
   const resetBtn  = document.getElementById('resetBtn');
   const camBtn    = document.getElementById('camBtn');
+  const focusBtn  = document.getElementById('focusBtn');
   const collapseBtn = document.getElementById('collapseBtn');
   const topbar    = document.getElementById('topbar');
   const unlockPill = document.getElementById('unlockPill');
@@ -404,6 +409,7 @@
   // =========================================================
   let currentStream = null;
   let facing = 'environment';
+  let focusLocked = false;
 
   async function startCamera(){
     stopCamera();
@@ -415,10 +421,60 @@
       cam.srcObject = currentStream;
       await cam.play().catch(()=>{});
       camError.classList.remove('show');
+      // フォーカス制御の可否を調べ、現在のロック状態を新しいトラックへ反映
+      setTimeout(applyFocusMode, 400);
     }catch(err){
       showCamError(err);
     }
   }
+
+  // =========================================================
+  //  フォーカス固定（対応端末のみ / iOS Safari は未対応）
+  // =========================================================
+  function getVideoTrack(){
+    return currentStream ? currentStream.getVideoTracks()[0] : null;
+  }
+  function focusCaps(){
+    const track = getVideoTrack();
+    if(!track || !track.getCapabilities) return { track:null, modes:[], caps:{} };
+    let caps = {};
+    try{ caps = track.getCapabilities() || {}; }catch(_){ caps = {}; }
+    return { track, modes: caps.focusMode || [], caps };
+  }
+  async function applyFocusMode(){
+    const { track, modes, caps } = focusCaps();
+    // このカメラでフォーカス制御ができるか
+    const supported = !!track && modes.length > 0;
+    focusBtn.disabled = !supported;
+    focusBtn.setAttribute('aria-label',
+      !supported ? 'この端末ではフォーカス固定に非対応'
+      : focusLocked ? 'フォーカス固定を解除' : 'フォーカスを固定');
+    if(!supported) return;
+    try{
+      if(focusLocked){
+        if(modes.includes('manual')){
+          const s = track.getSettings ? track.getSettings() : {};
+          let d = s.focusDistance;
+          if(d == null && caps.focusDistance){ d = (caps.focusDistance.min + caps.focusDistance.max) / 2; }
+          const adv = { focusMode:'manual' };
+          if(d != null) adv.focusDistance = d;   // いま合っている距離で固定
+          await track.applyConstraints({ advanced:[adv] });
+        } else if(modes.includes('single-shot')){
+          await track.applyConstraints({ advanced:[{ focusMode:'single-shot' }] });
+        } else if(modes.includes('none')){
+          await track.applyConstraints({ advanced:[{ focusMode:'none' }] });
+        }
+      } else if(modes.includes('continuous')){
+        await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
+      }
+    }catch(_){ /* 端末が拒否した場合は無視 */ }
+  }
+
+  focusBtn.addEventListener('click', () => {
+    focusLocked = !focusLocked;
+    focusBtn.setAttribute('aria-pressed', String(focusLocked));
+    applyFocusMode();
+  });
   function stopCamera(){
     if(currentStream){ currentStream.getTracks().forEach(t=>t.stop()); currentStream=null; }
   }
